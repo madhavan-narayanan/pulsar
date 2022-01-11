@@ -3007,6 +3007,7 @@ public class PersistentTopic extends AbstractTopic
                             // Message has been successfully persisted
                             messageDeduplication.recordMessagePersisted(publishContext,
                                     (PositionImpl) position);
+                            publishContext.setProperty("txn_id", txnID.toString());
                             publishContext.completed(null, ((PositionImpl) position).getLedgerId(),
                                     ((PositionImpl) position).getEntryId());
 
