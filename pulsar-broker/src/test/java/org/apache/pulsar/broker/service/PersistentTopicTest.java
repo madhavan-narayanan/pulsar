@@ -288,10 +288,8 @@ public class PersistentTopicTest extends MockedBookKeeperTestCase {
         doAnswer(new Answer<Object>() {
             @Override
             public Object answer(InvocationOnMock invocationOnMock) {
-                new Thread(() -> {
-                    ((OpenLedgerCallback) invocationOnMock.getArguments()[2])
-                            .openLedgerFailed(new ManagedLedgerException("Managed ledger failure"), null);
-                }).start();
+                new Thread(() -> ((OpenLedgerCallback) invocationOnMock.getArguments()[2])
+                        .openLedgerFailed(new ManagedLedgerException("Managed ledger failure"), null)).start();
 
                 return null;
             }
@@ -2162,6 +2160,28 @@ public class PersistentTopicTest extends MockedBookKeeperTestCase {
         assertFalse(fencedTopicMonitoringTask.isCancelled());
         assertTrue((boolean) isFencedField.get(topic));
         assertTrue((boolean) isClosingOrDeletingField.get(topic));
+    }
+
+    @Test
+    public void testTopicCloseFencingTimeout() throws Exception {
+        pulsar.getConfiguration().setTopicFencingTimeoutSeconds(10);
+        Method fence = PersistentTopic.class.getDeclaredMethod("fence");
+        fence.setAccessible(true);
+        Field fencedTopicMonitoringTaskField = PersistentTopic.class.getDeclaredField("fencedTopicMonitoringTask");
+        fencedTopicMonitoringTaskField.setAccessible(true);
+
+        // create topic
+        PersistentTopic topic = (PersistentTopic) brokerService.getOrCreateTopic(successTopicName).get();
+
+        // fence topic to init fencedTopicMonitoringTask
+        fence.invoke(topic);
+
+        // close topic
+        topic.close().get();
+        assertFalse(brokerService.getTopicReference(successTopicName).isPresent());
+        ScheduledFuture<?> fencedTopicMonitoringTask = (ScheduledFuture<?>) fencedTopicMonitoringTaskField.get(topic);
+        assertTrue(fencedTopicMonitoringTask.isDone());
+        assertTrue(fencedTopicMonitoringTask.isCancelled());
     }
 
     @Test
